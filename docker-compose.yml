@@ -1,0 +1,48 @@
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+
+    environment:
+      # ── Core ──────────────────────────────────────────────
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+
+      # ── Encryption key (REQUIRED – keep this secret & stable) ──
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in .env}
+
+      # ── Timezone ──────────────────────────────────────────
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Asia/Kolkata}
+      - TZ=${GENERIC_TIMEZONE:-Asia/Kolkata}
+
+      # ── Execution settings ────────────────────────────────
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+
+      # ── Gemini API key (used by Google Gemini Chat Model node) ──
+      - N8N_GEMINI_API_KEY=${N8N_GEMINI_API_KEY:-}
+
+    volumes:
+      # Persistent named volume – Docker creates it automatically
+      - n8n_data:/home/node/.n8n
+
+      # Mount the workflow JSON so you can import it on first run
+      - ./Social Media Chat Agent (fixed) (4).json:/home/node/workflow.json:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  n8n_data:
+    driver: local
