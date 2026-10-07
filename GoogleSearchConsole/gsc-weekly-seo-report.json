@@ -1,0 +1,843 @@
+{
+  "name": "Weekly GSC SEO Report (rule-based + Gemini recommendations)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "name": "Weekly Schedule (Mon 8AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -192,
+        16
+      ],
+      "id": "fc0fe54e-dcb8-4d2d-8e26-b04473ea6967"
+    },
+    {
+      "parameters": {},
+      "name": "Manual Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        304
+      ],
+      "id": "c988554d-a108-4348-a222-4f23efb16ab0"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ====== EDIT THIS BLOCK ======\nconst CONFIG = {\n  siteUrl: 'sc-domain:yourdomain.com',        // Domain property: 'sc-domain:x.com' | URL-prefix: 'https://www.x.com/'\n  reportEmail: 'your-email@example.com',// comma separate for multiple\n  lagDays: 3,                                 // GSC data lags ~2-3 days\n  periodDays: 7,                              // current / previous window length\n  minImpressions: 5,                          // ignore queries/pages below this (noise filter)\n  rankingChangeThreshold: 2,                  // positions moved to count as improved / declined\n  positionNoiseMax: 30,                       // if BOTH weeks are deeper than this, ignore the movement\n  ctrMaxPosition: 10,                         // \"CTR below expected\" check only for positions <= this\n  ctrMinExpectedClicks: 2,                    // ...and only if the benchmark predicts at least this many clicks\n  rankingOpportunityMin: 4,                   // striking distance range\n  rankingOpportunityMax: 30,\n  opportunityMinImpressions: 5,\n  targetPosition: 3,                          // upside is estimated for reaching this position\n  lowDataClicks: 30,                          // below this many clicks (cur+prev) show absolute change instead of %\n  brandTerms: ['yourbrand', 'brandname'],       // queries containing these are \"brand\"\n  commercialTerms: ['service', 'services', 'pricing', 'price', 'cost', 'consulting', 'consultant', 'consultants', 'company', 'companies', 'agency', 'hire', 'vendor', 'vendors', 'provider', 'providers', 'solution', 'solutions', 'case study', 'case studies', 'partner', 'outsourcing', 'quote', 'demo', 'implementation'],\n  informationalTerms: ['what', 'how', 'why', 'when', 'guide', 'tutorial', 'vs', 'versus', 'difference', 'example', 'examples', 'use case', 'use cases', 'best practices', 'benefits', 'explained', 'definition', 'overview', 'introduction', 'comparison', 'learn'],\n  topics: {},                                 // optional manual topics, e.g. { 'Agentic SDLC': ['agentic','sdlc'], 'Polars / DataFusion': ['polars','datafusion'] }. Empty = automatic.\n  sectionDepth: 2,                            // URL segments used to group pages: /resources/blogs/x -> /resources/blogs\n  cannibalMinImpressions: 3,                  // a page must have this many impressions for a query to count in cannibalization\n  targetCountries: [],                        // e.g. ['IND','USA'] (ISO-3 codes). Empty = skip target-market share\n  ctrCurve: { '1': 0.28, '2': 0.15, '3': 0.10, '4': 0.07, '5': 0.05, '6': 0.04, '7': 0.03, '8': 0.025, '9': 0.02, '10': 0.018, 'p11_20': 0.01, 'p21plus': 0.003 }, // generic benchmark CTR by position; replace with your own once you have history\n  topN: 10                                    // rows per section\n};\n// ====== DON'T EDIT BELOW ======\nconst fmt = (d) => d.toISOString().slice(0, 10);\nconst addDays = (d, n) => { const x = new Date(d); x.setUTCDate(x.getUTCDate() + n); return x; };\nconst curEnd = addDays(new Date(), -CONFIG.lagDays);\nconst curStart = addDays(curEnd, -(CONFIG.periodDays - 1));\nconst prevEnd = addDays(curStart, -1);\nconst prevStart = addDays(prevEnd, -(CONFIG.periodDays - 1));\nreturn [{ json: { ...CONFIG, curStart: fmt(curStart), curEnd: fmt(curEnd), prevStart: fmt(prevStart), prevEnd: fmt(prevEnd) } }];\n"
+      },
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        160
+      ],
+      "id": "8e71143b-fe03-4c9a-bc49-ca58492b6bc3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($('Config').first().json.siteUrl) }}/searchAnalytics/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ startDate: $('Config').first().json.curStart, endDate: $('Config').first().json.curEnd }) }}",
+        "options": {}
+      },
+      "name": "GSC Totals Current",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        288,
+        160
+      ],
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "id": "5c64ecbc-27df-4692-a714-0aa2c1f14e51",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "",
+          "name": "Select googleOAuth2Api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($('Config').first().json.siteUrl) }}/searchAnalytics/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ startDate: $('Config').first().json.prevStart, endDate: $('Config').first().json.prevEnd }) }}",
+        "options": {}
+      },
+      "name": "GSC Totals Previous",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        528,
+        160
+      ],
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "id": "805720ee-8b8d-4e99-bb1f-e1f8f04938aa",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "",
+          "name": "Select googleOAuth2Api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($('Config').first().json.siteUrl) }}/searchAnalytics/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ startDate: $('Config').first().json.curStart, endDate: $('Config').first().json.curEnd, dimensions: [\"query\"], rowLimit: 25000, startRow: 0 }) }}",
+        "options": {
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "body",
+                    "name": "startRow",
+                    "value": "={{ $pageCount * 25000 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.rows || $response.body.rows.length < 25000 }}",
+              "limitPagesFetched": true,
+              "maxRequests": 20
+            }
+          }
+        }
+      },
+      "name": "GSC Queries Current",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        752,
+        160
+      ],
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "id": "c534106c-be49-4459-aa08-5c6ed12283f2",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "",
+          "name": "Select googleOAuth2Api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($('Config').first().json.siteUrl) }}/searchAnalytics/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ startDate: $('Config').first().json.prevStart, endDate: $('Config').first().json.prevEnd, dimensions: [\"query\"], rowLimit: 25000, startRow: 0 }) }}",
+        "options": {
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "body",
+                    "name": "startRow",
+                    "value": "={{ $pageCount * 25000 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.rows || $response.body.rows.length < 25000 }}",
+              "limitPagesFetched": true,
+              "maxRequests": 20
+            }
+          }
+        }
+      },
+      "name": "GSC Queries Previous",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        992,
+        160
+      ],
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "id": "37f1e5a3-ec06-463f-9d9c-0cd5db27710b",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "",
+          "name": "Select googleOAuth2Api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($('Config').first().json.siteUrl) }}/searchAnalytics/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ startDate: $('Config').first().json.curStart, endDate: $('Config').first().json.curEnd, dimensions: [\"page\"], rowLimit: 25000, startRow: 0 }) }}",
+        "options": {
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "body",
+                    "name": "startRow",
+                    "value": "={{ $pageCount * 25000 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.rows || $response.body.rows.length < 25000 }}",
+              "limitPagesFetched": true,
+              "maxRequests": 20
+            }
+          }
+        }
+      },
+      "name": "GSC Pages Current",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1248,
+        160
+      ],
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "id": "0c3f51de-0c43-44bb-af18-21c3f8e476d0",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "",
+          "name": "Select googleOAuth2Api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($('Config').first().json.siteUrl) }}/searchAnalytics/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ startDate: $('Config').first().json.prevStart, endDate: $('Config').first().json.prevEnd, dimensions: [\"page\"], rowLimit: 25000, startRow: 0 }) }}",
+        "options": {
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "body",
+                    "name": "startRow",
+                    "value": "={{ $pageCount * 25000 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.rows || $response.body.rows.length < 25000 }}",
+              "limitPagesFetched": true,
+              "maxRequests": 20
+            }
+          }
+        }
+      },
+      "name": "GSC Pages Previous",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1488,
+        160
+      ],
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "id": "36e47cfb-3020-4e99-a2a2-63b3279eb107",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "",
+          "name": "Select googleOAuth2Api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($('Config').first().json.siteUrl) }}/searchAnalytics/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ startDate: $('Config').first().json.curStart, endDate: $('Config').first().json.curEnd, dimensions: [\"query\", \"page\"], rowLimit: 25000, startRow: 0 }) }}",
+        "options": {
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "body",
+                    "name": "startRow",
+                    "value": "={{ $pageCount * 25000 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.rows || $response.body.rows.length < 25000 }}",
+              "limitPagesFetched": true,
+              "maxRequests": 20
+            }
+          }
+        }
+      },
+      "name": "GSC QueryPage Current",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1728,
+        160
+      ],
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "id": "6fbc7b3d-dc20-4a87-aadf-349255569041",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "",
+          "name": "Select googleOAuth2Api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($('Config').first().json.siteUrl) }}/searchAnalytics/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ startDate: $('Config').first().json.curStart, endDate: $('Config').first().json.curEnd, dimensions: [\"country\"], rowLimit: 25000, startRow: 0 }) }}",
+        "options": {
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "body",
+                    "name": "startRow",
+                    "value": "={{ $pageCount * 25000 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.rows || $response.body.rows.length < 25000 }}",
+              "limitPagesFetched": true,
+              "maxRequests": 20
+            }
+          }
+        }
+      },
+      "name": "GSC Country Current",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1968,
+        160
+      ],
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "id": "d1f4030f-1927-429f-98f7-bd0af5d02534",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "",
+          "name": "Select googleOAuth2Api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst thr = cfg.rankingChangeThreshold;\nconst N = cfg.topN;\n\nconst rowsOf = (name) => $(name).all().flatMap((i) => (i.json && Array.isArray(i.json.rows) ? i.json.rows : []));\nconst pct = (c, p) => (p > 0 ? ((c - p) / p) * 100 : null);\nconst n0 = (x) => Math.round(Number(x) || 0).toLocaleString('en-US');\nconst f1 = (x) => Number(x).toFixed(1);\nconst norm = (q) => ' ' + String(q).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim() + ' ';\nconst sum = (arr, k) => arr.reduce((s, e) => s + (e[k] || 0), 0);\nconst wpos = (arr, pk, wk) => { let s = 0, w = 0; for (const e of arr) if (e[pk] !== null && e[pk] !== undefined && e[wk] > 0) { s += e[pk] * e[wk]; w += e[wk]; } return w ? s / w : null; };\n\n// ---------- Overall KPIs ----------\nconst total = (name) => {\n  const r = rowsOf(name)[0];\n  return r ? { clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: r.position }\n           : { clicks: 0, impressions: 0, ctr: 0, position: 0 };\n};\nconst tc = total('GSC Totals Current');\nconst tp = total('GSC Totals Previous');\nconst lowVol = tc.clicks + tp.clicks < cfg.lowDataClicks;\nconst kpi = {\n  lowVol,\n  clicks: { cur: tc.clicks, prev: tp.clicks, pct: pct(tc.clicks, tp.clicks) },\n  impressions: { cur: tc.impressions, prev: tp.impressions, pct: pct(tc.impressions, tp.impressions) },\n  ctr: { cur: tc.ctr, prev: tp.ctr, diff: (tc.ctr - tp.ctr) * 100 },\n  position: { cur: tc.position, prev: tp.position, delta: tp.position - tc.position }\n};\n\n// ---------- Helpers: brand, intent, CTR benchmark ----------\nconst brandTerms = (cfg.brandTerms || []).map((t) => t.toLowerCase());\nconst isBrand = (q) => { const s = String(q).toLowerCase(); return brandTerms.some((t) => s.includes(t)); };\nconst hasTerm = (s, list) => (list || []).some((t) => s.includes(' ' + t.toLowerCase() + ' '));\nconst intentOf = (q) => {\n  if (isBrand(q)) return 'Brand';\n  const s = norm(q);\n  if (hasTerm(s, cfg.commercialTerms)) return 'Commercial';\n  if (hasTerm(s, cfg.informationalTerms)) return 'Informational';\n  return 'Other / topic';\n};\nconst ctrAt = (pos) => {\n  const c = cfg.ctrCurve; const r = Math.round(pos);\n  if (r <= 1) return c['1'];\n  if (r <= 10) return c[String(r)];\n  return r <= 20 ? c.p11_20 : c.p21plus;\n};\n\n// ---------- Compare current vs previous per query / page ----------\nconst blank = (key) => ({ key, c: 0, i: 0, ctr: 0, pos: null, pc: 0, pi: 0, pctr: 0, ppos: null });\n\nfunction compare(curRows, prevRows) {\n  const m = new Map();\n  for (const r of prevRows) {\n    const e = blank(r.keys[0]);\n    e.pc = r.clicks; e.pi = r.impressions; e.pctr = r.ctr; e.ppos = r.position;\n    m.set(e.key, e);\n  }\n  for (const r of curRows) {\n    const e = m.get(r.keys[0]) || blank(r.keys[0]);\n    e.c = r.clicks; e.i = r.impressions; e.ctr = r.ctr; e.pos = r.position;\n    m.set(e.key, e);\n  }\n  const out = [];\n  for (const e of m.values()) {\n    e.posDelta = e.pos !== null && e.ppos !== null ? e.ppos - e.pos : null; // + = improved\n    e.clickDiff = e.c - e.pc;\n    e.clickPct = pct(e.c, e.pc);\n    e.impPct = pct(e.i, e.pi);\n    e.exp = e.pos !== null ? e.i * ctrAt(e.pos) : 0; // benchmark clicks\n    let status = 'IGNORED';\n    if (e.pi === 0 && e.i >= cfg.minImpressions) status = 'NEW';\n    else if (e.i === 0 && e.pi >= cfg.minImpressions) status = 'LOST';\n    else if (e.i >= cfg.minImpressions && e.pi >= cfg.minImpressions && e.posDelta !== null) {\n      if (Math.min(e.pos, e.ppos) > cfg.positionNoiseMax) status = 'IGNORED'; // both weeks deep = noise\n      else status = e.posDelta >= thr ? 'IMPROVED' : e.posDelta <= -thr ? 'DECLINED' : 'STABLE';\n    }\n    e.status = status;\n    out.push(e);\n  }\n  return out;\n}\n\nconst queries = compare(rowsOf('GSC Queries Current'), rowsOf('GSC Queries Previous'));\nconst pages = compare(rowsOf('GSC Pages Current'), rowsOf('GSC Pages Previous'));\n\nconst count = (arr) => {\n  const o = { IMPROVED: 0, STABLE: 0, DECLINED: 0, NEW: 0, LOST: 0 };\n  for (const e of arr) if (o[e.status] !== undefined) o[e.status]++;\n  return o;\n};\nconst counts = { queries: count(queries), pages: count(pages) };\n\n// ---------- Query -> page mapping ----------\nconst qpMap = new Map();\nfor (const r of rowsOf('GSC QueryPage Current')) {\n  const q = r.keys[0], p = r.keys[1];\n  if (!qpMap.has(q)) qpMap.set(q, []);\n  qpMap.get(q).push({ page: p, i: r.impressions, c: r.clicks, pos: r.position });\n}\nconst pathOf = (u) => String(u).replace(/^https?:\\/\\/[^/]+/, '').split('?')[0].split('#')[0] || '/';\nconst primaryPage = (q) => { const a = qpMap.get(q); return a && a.length ? a.slice().sort((x, y) => y.i - x.i)[0] : null; };\nconst cannibal = [...qpMap.entries()]\n  .map(([q, a]) => ({ q, total: sum(a, 'i'), pages: a.filter((x) => x.i >= cfg.cannibalMinImpressions).sort((x, y) => x.pos - y.pos) }))\n  .filter((x) => x.pages.length >= 2)\n  .sort((a, b) => b.total - a.total)\n  .map((x) => ({ key: x.q, total: x.total, pages: x.pages.map((p) => ({ path: pathOf(p.page), pos: p.pos, i: p.i, c: p.c })) }));\n\n// ---------- Brand vs non-brand (+ hidden/anonymized) ----------\nconst brandQ = queries.filter((e) => isBrand(e.key));\nconst nonBrandQ = queries.filter((e) => !isBrand(e.key));\nconst agg = (arr) => ({ c: sum(arr, 'c'), i: sum(arr, 'i'), pc: sum(arr, 'pc'), pi: sum(arr, 'pi'), n: arr.filter((e) => e.i > 0).length });\nconst brandSplit = {\n  brand: agg(brandQ),\n  nonBrand: agg(nonBrandQ),\n  hidden: {\n    c: Math.max(0, tc.clicks - sum(queries, 'c')), i: Math.max(0, tc.impressions - sum(queries, 'i')),\n    pc: Math.max(0, tp.clicks - sum(queries, 'pc')), pi: Math.max(0, tp.impressions - sum(queries, 'pi'))\n  }\n};\n\n// ---------- Intent / funnel split ----------\nconst intentNames = ['Brand', 'Commercial', 'Informational', 'Other / topic'];\nconst intent = intentNames.map((name) => {\n  const arr = queries.filter((e) => intentOf(e.key) === name);\n  const a = agg(arr);\n  return { name, ...a, examples: arr.filter((e) => e.i > 0).sort((x, y) => y.i - x.i).slice(0, 3).map((e) => e.key) };\n});\nconst visibleImpr = sum(queries, 'i');\nconst visiblePrevImpr = sum(queries, 'pi');\n\n// ---------- Position buckets (visibility mix) ----------\nconst bucketNames = ['1-3', '4-10', '11-20', '21-50', '51+'];\nconst bucketOf = (p) => (p <= 3 ? 0 : p <= 10 ? 1 : p <= 20 ? 2 : p <= 50 ? 3 : 4);\nconst buckets = bucketNames.map((name) => ({ name, i: 0, n: 0, pi: 0, pn: 0 }));\nfor (const e of queries) {\n  if (e.pos !== null && e.i > 0) { const b = buckets[bucketOf(e.pos)]; b.i += e.i; b.n++; }\n  if (e.ppos !== null && e.pi > 0) { const b = buckets[bucketOf(e.ppos)]; b.pi += e.pi; b.pn++; }\n}\nconst deepShare = {\n  cur: visibleImpr ? (buckets[3].i + buckets[4].i) / visibleImpr : 0,\n  prev: visiblePrevImpr ? (buckets[3].pi + buckets[4].pi) / visiblePrevImpr : 0\n};\n\n// ---------- Topic clusters (non-brand) ----------\nconst STOP = new Set(['a', 'an', 'the', 'in', 'of', 'for', 'to', 'and', 'or', 'vs', 'versus', 'with', 'on', 'is', 'are', 'what', 'how', 'why', 'when', 'which', 'best', 'top', 'use', 'uses', 'using', 'case', 'cases', 'study', 'studies', 'ai', 'software', 'service', 'services', 'solution', 'solutions', 'company', 'companies', 'guide', 'tutorial', 'example', 'examples', 'new', 'free', 'online', 'from', 'by', 'at', 'as', 'it', 'its', 'do', 'does', 'can', 'my', 'your', 'you', 'we', 'vs.']);\nconst tokensOf = (q) => [...new Set(norm(q).trim().split(' ').filter((t) => t.length > 1 && !STOP.has(t)))];\nfunction buildAssigner() {\n  const manual = cfg.topics && Object.keys(cfg.topics).length ? Object.entries(cfg.topics) : null;\n  if (manual) {\n    return (q) => { const s = norm(q); for (const [name, kws] of manual) if (hasTerm(s, kws)) return name; return null; };\n  }\n  const w = new Map(), n = new Map();\n  for (const e of nonBrandQ) {\n    if (e.i <= 0) continue;\n    for (const t of tokensOf(e.key)) { w.set(t, (w.get(t) || 0) + e.i); n.set(t, (n.get(t) || 0) + 1); }\n  }\n  const good = new Set([...n.entries()].filter(([, c]) => c >= 2).map(([t]) => t));\n  return (q) => {\n    let best = null, bw = -1;\n    for (const t of tokensOf(q)) {\n      if (!good.has(t)) continue;\n      const x = w.get(t);\n      if (x > bw || (x === bw && t < best)) { best = t; bw = x; }\n    }\n    return best;\n  };\n}\nconst assign = buildAssigner();\nconst topicMap = new Map();\nfor (const e of nonBrandQ) {\n  const t = assign(e.key) || '(one-off queries)';\n  if (!topicMap.has(t)) topicMap.set(t, { name: t, arr: [] });\n  topicMap.get(t).arr.push(e);\n}\nconst topics = [...topicMap.values()].map((t) => ({\n  name: t.name, n: t.arr.filter((e) => e.i > 0).length,\n  i: sum(t.arr, 'i'), c: sum(t.arr, 'c'), pi: sum(t.arr, 'pi'),\n  pos: wpos(t.arr, 'pos', 'i'),\n  top: t.arr.filter((e) => e.i > 0).sort((x, y) => y.i - x.i).slice(0, 3).map((e) => e.key)\n})).filter((t) => t.i > 0 || t.pi > 0).sort((a, b) => b.i - a.i).slice(0, N);\n\n// ---------- Content sections (URL groups) ----------\nconst sectionOf = (u) => {\n  const segs = pathOf(u).split('/').filter(Boolean);\n  return segs.length ? '/' + segs.slice(0, cfg.sectionDepth).join('/') : '/ (home)';\n};\nconst secMap = new Map();\nfor (const e of pages) {\n  const s = sectionOf(e.key);\n  if (!secMap.has(s)) secMap.set(s, []);\n  secMap.get(s).push(e);\n}\nconst contentSections = [...secMap.entries()].map(([name, arr]) => {\n  const i = sum(arr, 'i'), c = sum(arr, 'c');\n  return { name, pages: arr.filter((e) => e.i > 0).length, i, c, ctr: i ? c / i : 0, pos: wpos(arr, 'pos', 'i'), pi: sum(arr, 'pi'), pc: sum(arr, 'pc') };\n}).filter((s) => s.i > 0 || s.pi > 0).sort((a, b) => b.i - a.i).slice(0, N);\n\n// ---------- Striking distance with estimated upside ----------\nconst upside = (e) => Math.max(0, e.i * (ctrAt(cfg.targetPosition) - ctrAt(e.pos)));\nconst strikeAll = nonBrandQ\n  .filter((e) => e.pos !== null && e.pos >= cfg.rankingOpportunityMin && e.pos <= cfg.rankingOpportunityMax && e.i >= cfg.opportunityMinImpressions)\n  .map((e) => { const pp = primaryPage(e.key); return { ...e, up: upside(e), page: pp ? pathOf(pp.page) : null }; })\n  .sort((a, b) => b.up - a.up);\nconst striking = { rows: strikeAll.slice(0, N), count: strikeAll.length, upside: strikeAll.reduce((s, e) => s + e.up, 0) };\n\n// ---------- Countries ----------\nconst NAMES = { IND: 'India', USA: 'United States', GBR: 'United Kingdom', CAN: 'Canada', AUS: 'Australia', DEU: 'Germany', FRA: 'France', SGP: 'Singapore', ARE: 'UAE', NLD: 'Netherlands', IRL: 'Ireland', PAK: 'Pakistan', BGD: 'Bangladesh', PHL: 'Philippines', IDN: 'Indonesia', BRA: 'Brazil', SAU: 'Saudi Arabia', ZAF: 'South Africa', CHN: 'China', JPN: 'Japan' };\nconst cRows = rowsOf('GSC Country Current').map((r) => ({ code: String(r.keys[0]).toUpperCase(), i: r.impressions, c: r.clicks, pos: r.position }));\nconst cTotal = sum(cRows, 'i');\nconst countries = cRows.sort((a, b) => b.i - a.i).slice(0, 5).map((r) => ({ ...r, name: NAMES[r.code] || r.code, share: cTotal ? r.i / cTotal : 0 }));\nconst tgt = (cfg.targetCountries || []).map((x) => x.toUpperCase());\nconst targetShare = tgt.length && cTotal ? cRows.filter((r) => tgt.includes(r.code)).reduce((s, r) => s + r.i, 0) / cTotal : null;\n\n// ---------- Sections (lists) ----------\nconst by = (f, dir = -1) => (a, b) => dir * (f(a) - f(b));\nconst pick = (arr, filt, cmp) => arr.filter(filt).sort(cmp).slice(0, N);\nconst sections = {\n  topClicks: pick(queries, (e) => e.c > 0, by((e) => e.c)),\n  topImpressions: pick(queries, (e) => e.i > 0, by((e) => e.i)),\n  topRanking: pick(queries, (e) => e.pos !== null && e.pos <= 3 && e.i >= cfg.minImpressions, by((e) => e.c)),\n  ctrBelowExpected: pick(queries, (e) => e.pos !== null && e.pos <= cfg.ctrMaxPosition && e.exp >= cfg.ctrMinExpectedClicks && e.c < 0.5 * e.exp, by((e) => e.exp - e.c)),\n  improved: pick(queries, (e) => e.status === 'IMPROVED', by((e) => e.posDelta)),\n  declined: pick(queries, (e) => e.status === 'DECLINED', by((e) => e.posDelta, 1)),\n  newQueries: pick(queries, (e) => e.status === 'NEW', by((e) => e.i)),\n  lostQueries: pick(queries, (e) => e.status === 'LOST', by((e) => e.pi)),\n  pagesNewWithClicks: pick(pages, (e) => e.pc === 0 && e.c > 0, by((e) => e.c)),\n  pagesImproved: pick(pages, (e) => e.status === 'IMPROVED', by((e) => e.posDelta)),\n  pagesDeclined: pick(pages, (e) => e.status === 'DECLINED', by((e) => e.posDelta, 1)),\n  pagesGainingClicks: pick(pages, (e) => e.pc > 0 && e.clickDiff > 0, by((e) => e.clickDiff)),\n  pagesLosingClicks: pick(pages, (e) => e.clickDiff < 0, by((e) => e.clickDiff, 1))\n};\nsections.ctrBelowExpected.forEach((e) => { e.page = (primaryPage(e.key) || {}).page ? pathOf(primaryPage(e.key).page) : null; });\n\n// ---------- Key takeaways (pure rules, no AI) ----------\nconst T = [];\nconst sgn = (x) => (x > 0 ? '+' : '') + x;\nconst pl = (n, w) => `${n0(n)} ${w}${Math.round(n) === 1 ? '' : 's'}`;\nif (kpi.impressions.pct !== null) {\n  let t = `Impressions ${sgn(f1(kpi.impressions.pct))}% (${n0(tp.impressions)} \u2192 ${n0(tc.impressions)}), clicks ${n0(tp.clicks)} \u2192 ${n0(tc.clicks)}.`;\n  if (kpi.impressions.pct > 0 && deepShare.cur > deepShare.prev + 0.05) {\n    t += ` Growth came mostly from deep rankings: ${Math.round(deepShare.cur * 100)}% of visible-query impressions are now beyond position 20 (was ${Math.round(deepShare.prev * 100)}%). Avg position (${f1(tp.position)} \u2192 ${f1(tc.position)}) fell through this mix; individual queries: ${counts.queries.IMPROVED} improved, ${counts.queries.DECLINED} declined.`;\n  }\n  T.push({ type: kpi.impressions.pct >= 0 ? 'good' : 'warn', text: t });\n}\nif (tc.clicks > 0) {\n  const b = brandSplit.brand, nb = brandSplit.nonBrand, h = brandSplit.hidden;\n  T.push({ type: 'info', text: `Brand queries drive ${n0(b.c)} of ${pl(tc.clicks, 'click')}; non-brand queries drive ${pl(nb.c, 'click')} from ${pl(nb.i, 'impression')}. ${pl(h.c, 'click')} (${Math.round((h.c / tc.clicks) * 100)}%) come from anonymized queries that GSC does not list.` });\n}\nif (topics.length && topics[0].name !== '(one-off queries)') {\n  const t = topics[0];\n  const where = t.pos > 20 ? 'mostly beyond page 2' : t.pos > 10 ? 'on page 2' : 'on page 1';\n  T.push({ type: t.pos > 10 ? 'warn' : 'info', text: `Biggest non-brand topic: \"${t.name}\" with ${n0(t.i)} impressions over ${pl(t.n, 'query').replace('querys','queries')}, avg position ${f1(t.pos)} (${where}), ${pl(t.c, 'click')}.` });\n}\nif (striking.count > 0) {\n  T.push({ type: 'good', text: `${pl(striking.count, 'non-brand query').replace('querys','queries')} sit at positions ${cfg.rankingOpportunityMin}-${cfg.rankingOpportunityMax}. Reaching position ${cfg.targetPosition} could add roughly ${f1(striking.upside)} clicks per week (estimate from a generic CTR curve, treat as a rough upper bound).` });\n}\nconst com = intent.find((x) => x.name === 'Commercial');\nif (visibleImpr > 0) {\n  T.push({ type: com.i === 0 ? 'warn' : 'info', text: com.i === 0\n    ? 'No commercial-intent queries (services, pricing, case studies, etc.) got impressions: search visibility is brand and informational only.'\n    : `Commercial-intent queries are ${Math.round((com.i / visibleImpr) * 100)}% of visible impressions (${n0(com.i)}) and ${pl(com.c, 'click')}.` });\n}\nif (contentSections.length) {\n  const topI = contentSections[0];\n  const topC = contentSections.slice().sort((a, b) => b.c - a.c)[0];\n  T.push({ type: 'info', text: topC.c > 0 && topC.name !== topI.name\n    ? `${topI.name} has the most impressions (${n0(topI.i)}, ${pl(topI.c, 'click')}); ${topC.name} earns the most clicks (${n0(topC.c)}).`\n    : `${topI.name} is the most visible section: ${n0(topI.i)} impressions, ${pl(topI.c, 'click')}.` });\n}\nif (cannibal.length) T.push({ type: 'warn', text: `${pl(cannibal.length, 'query').replace('querys','queries')} served by 2+ of your pages (possible cannibalization), e.g. \"${cannibal[0].key}\".` });\nif (targetShare !== null) T.push({ type: targetShare < 0.5 ? 'warn' : 'info', text: `${Math.round(targetShare * 100)}% of impressions come from your target countries (${tgt.join(', ')}).` });\nif (lowVol) T.push({ type: 'warn', text: `Low volume: only ${n0(tc.clicks + tp.clicks)} clicks across both weeks, so treat percentage changes as directional, not conclusive.` });\n\nreturn [{ json: { kpi, counts, sections, brandSplit, intent, visibleImpr, buckets, deepShare, topics, contentSections, striking, cannibal: cannibal.slice(0, N), countries, targetShare, takeaways: T } }];\n"
+      },
+      "name": "Analyze",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2208,
+        160
+      ],
+      "id": "93d8b15c-1427-4a74-8dde-7ec10a18ff90"
+    },
+    {
+      "parameters": {
+        "jsCode": "const a = $input.first().json;               // Analyze output\nconst cfg = $('Config').first().json;\n\n// ====== AI SETTINGS ======\nconst AI = {\n  model: 'gemini-3.5-flash',   // AI Studio mein jo free model dikhe, wahi ID daalo (2.5 models 16 Oct 2026 ko band ho rahe hain)\n  pageMode: 'growth',          // 'growth' = impressions >= +50% vs last week | 'share' = page has >= 50% of total impressions\n  pageThreshold: 0.5,\n  minPageImpressions: 10,\n  maxCtrQueries: 12,\n  maxPages: 6,\n  queriesPerPage: 5\n};\n// =========================\n\nconst rowsOf = (name) => $(name).all().flatMap((i) => (i.json && Array.isArray(i.json.rows) ? i.json.rows : []));\nconst pathOf = (u) => String(u).replace(/^https?:\\/\\/[^/]+/, '').split('?')[0].split('#')[0] || '/';\nconst r1 = (x) => Math.round((Number(x) || 0) * 10) / 10;\nconst brand = (cfg.brandTerms || []).map((t) => t.toLowerCase());\nconst isBrand = (q) => brand.some((t) => String(q).toLowerCase().includes(t));\n\n// query -> page rows\nconst qp = rowsOf('GSC QueryPage Current').map((r) => ({ q: r.keys[0], full: r.keys[1], page: pathOf(r.keys[1]), i: r.impressions, c: r.clicks, pos: r.position }));\nconst primary = new Map();\nfor (const r of qp) { const b = primary.get(r.q); if (!b || r.i > b.i) primary.set(r.q, r); }\n\n// ---- Group 1: CTR / clicks ----\nconst seen = new Set();\nconst ctrQueries = [];\nconst add = (e, flag) => {\n  if (seen.has(e.key) || isBrand(e.key) || ctrQueries.length >= AI.maxCtrQueries) return;\n  seen.add(e.key);\n  const p = primary.get(e.key);\n  ctrQueries.push({ query: e.key, page: p ? p.page : null, position: r1(e.pos), impressions: e.i, clicks: e.c, ctrPct: r1(e.ctr * 100), benchmarkClicks: r1(e.exp), flag });\n};\na.sections.ctrBelowExpected.forEach((e) => add(e, 'below_benchmark_ctr'));\na.sections.topImpressions\n  .filter((e) => e.c === 0 && e.pos !== null && e.pos <= 20 && e.i >= cfg.minImpressions)\n  .forEach((e) => add(e, 'impressions_but_no_clicks'));\n\nconst striking = a.striking.rows.slice(0, 8).map((e) => ({ query: e.key, page: e.page, position: r1(e.pos), impressions: e.i, clicks: e.c }));\n\n// ---- Group 2: pages (50% rule) ----\nconst prevMap = new Map(rowsOf('GSC Pages Previous').map((r) => [r.keys[0], r]));\nconst curPages = rowsOf('GSC Pages Current');\nconst totalI = curPages.reduce((s, r) => s + r.impressions, 0);\nconst thrPct = AI.pageThreshold * 100;\nconst pages = curPages.map((r) => {\n  const p = prevMap.get(r.keys[0]);\n  const pi = p ? p.impressions : 0;\n  return {\n    full: r.keys[0], page: pathOf(r.keys[0]), impressions: r.impressions, clicks: r.clicks, position: r1(r.position),\n    prevImpressions: pi, growthPct: pi > 0 ? r1(((r.impressions - pi) / pi) * 100) : null,\n    sharePct: totalI ? r1((r.impressions / totalI) * 100) : 0\n  };\n}).filter((p) => p.impressions >= AI.minPageImpressions);\n\nlet sel = pages.filter((p) => (AI.pageMode === 'share' ? p.sharePct >= thrPct : p.growthPct !== null && p.growthPct >= thrPct));\nlet fallback = false;\nif (!sel.length) { fallback = true; sel = pages.slice(); }\nsel = sel.sort((x, y) => y.impressions - x.impressions).slice(0, AI.maxPages)\n  .map(({ full, ...p }) => ({\n    ...p,\n    topQueries: qp.filter((r) => r.full === full && !isBrand(r.q)).sort((x, y) => y.i - x.i).slice(0, AI.queriesPerPage)\n      .map((r) => ({ query: r.q, position: r1(r.pos), impressions: r.i, clicks: r.c }))\n  }));\n\nconst aiPayload = {\n  site: cfg.siteUrl,\n  period: `${cfg.curStart} to ${cfg.curEnd}`,\n  totals: { clicks: a.kpi.clicks.cur, impressions: a.kpi.impressions.cur, ctrPct: r1(a.kpi.ctr.cur * 100), avgPosition: r1(a.kpi.position.cur) },\n  pageSelectionRule: fallback ? 'No page met the rule; these are the top pages by impressions'\n    : AI.pageMode === 'share' ? `pages with >= ${thrPct}% share of total impressions` : `pages whose impressions grew >= ${thrPct}% vs previous week`,\n  ctrQueries, strikingDistance: striking, pages: sel\n};\n\nconst system = `You are a senior SEO strategist writing weekly recommendations for a B2B tech services website.\nRules:\n- Use ONLY the JSON data provided. Never invent queries, pages, metrics or numbers.\n- You have NOT seen the live title tags or meta descriptions. Title/meta options are suggestions built from the query wording; say nothing about what the current title is.\n- Do not give recommendations for brand queries.\n- Data volume may be low: keep advice practical and specific, avoid over-claiming.\n- For ctr_recommendations: only use queries from ctrQueries. For page_recommendations: only use pages from pages. Copy the query / page value exactly as given.\n- Be concise: each action is one short sentence.`;\n\nconst str = { type: 'STRING' };\nconst strArr = { type: 'ARRAY', items: str };\nconst prio = { type: 'STRING', enum: ['High', 'Medium', 'Low'] };\nconst geminiBody = {\n  systemInstruction: { parts: [{ text: system }] },\n  contents: [{ role: 'user', parts: [{ text:\n    'Write recommendations. (1) For ctrQueries: how to improve CTR/clicks (title options, meta description, intent match, snippet/schema). (2) For pages: how to increase impressions (target striking-distance queries, sections/FAQs to add, internal links, cannibalization if relevant).\\n\\nDATA:\\n' + JSON.stringify(aiPayload) }] }],\n  generationConfig: {\n    temperature: 0.2,\n    maxOutputTokens: 8192,\n    responseMimeType: 'application/json',\n    responseSchema: {\n      type: 'OBJECT',\n      properties: {\n        ctr_recommendations: { type: 'ARRAY', items: { type: 'OBJECT',\n          properties: { query: str, page: str, problem: str, title_options: strArr, meta_option: str, other_actions: strArr, priority: prio },\n          required: ['query', 'problem', 'title_options', 'other_actions', 'priority'] } },\n        page_recommendations: { type: 'ARRAY', items: { type: 'OBJECT',\n          properties: { page: str, problem: str, target_queries: strArr, actions: strArr, priority: prio },\n          required: ['page', 'problem', 'actions', 'priority'] } }\n      },\n      required: ['ctr_recommendations', 'page_recommendations']\n    }\n  }\n};\n\nreturn [{ json: { ...a, aiPayload, aiMeta: { model: AI.model }, geminiBody } }];\n"
+      },
+      "name": "Build AI Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        160
+      ],
+      "id": "5edceef1-9290-4446-94b5-d7243e2cc980"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $json.aiMeta.model }}:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.geminiBody) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "name": "Gemini Recommendations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2688,
+        160
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "id": "49a4ce9c-8449-4e2e-867c-4e4cd5d7ad7e",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Select httpHeaderAuth"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { geminiBody, aiPayload, aiMeta, ...a } = $('Build AI Payload').first().json;\nconst res = $input.first().json;\nconst ai = { ok: false, reason: '', ctr: [], pages: [], rule: aiPayload.pageSelectionRule };\n\ntry {\n  const parts = (((res.candidates || [])[0] || {}).content || {}).parts || [];\n  const text = parts.map((p) => p.text || '').join('');\n  if (!text) {\n    const err = res.error && (res.error.message || res.error);\n    throw new Error(err ? (typeof err === 'string' ? err : JSON.stringify(err)) : 'empty response from Gemini');\n  }\n  const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());\n\n  // Keep only recommendations that point at queries / pages we actually sent\n  const qMap = new Map(aiPayload.ctrQueries.map((x) => [x.query, x]));\n  const pMap = new Map(aiPayload.pages.map((x) => [x.page, x]));\n\n  ai.ctr = (parsed.ctr_recommendations || []).filter((r) => qMap.has(r.query)).map((r) => {\n    const ref = qMap.get(r.query);\n    return { ...r, ref, extraClicks: Math.max(0, ref.benchmarkClicks - ref.clicks) };\n  });\n  ai.pages = (parsed.page_recommendations || []).filter((r) => pMap.has(r.page)).map((r) => ({ ...r, ref: pMap.get(r.page) }));\n  ai.ok = true;\n} catch (e) {\n  ai.reason = String((e && e.message) || e).slice(0, 200);\n}\n\nreturn [{ json: { ...a, ai } }];\n"
+      },
+      "name": "Parse AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2928,
+        160
+      ],
+      "id": "9155ff6f-16d4-4d13-ba89-e03bee6f8c01"
+    },
+    {
+      "parameters": {
+        "jsCode": "const a = $input.first().json;\nconst cfg = $('Config').first().json;\nconst k = a.kpi;\n\nconst esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst n0 = (x) => Number(x || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });\nconst f1 = (x) => (x === null || x === undefined ? '\u2013' : Number(x).toFixed(1));\nconst ctrTxt = (x) => (Number(x || 0) * 100).toFixed(2) + '%';\nconst pctTxt = (x, nul = 'new') => (x === null || x === undefined ? nul : (x > 0 ? '+' : '') + x.toFixed(1) + '%');\nconst signed = (x, d = 1) => (x === null || x === undefined ? '\u2013' : (x > 0 ? '+' : '') + Number(x).toFixed(d));\nconst color = (x) => (x > 0 ? '#16a34a' : x < 0 ? '#dc2626' : '#6b7280');\nconst colored = (txt, x) => `<span style=\"color:${color(x)};font-weight:600\">${txt}</span>`;\nconst share = (x, tot) => (tot > 0 ? Math.round((x / tot) * 100) + '%' : '\u2013');\nconst shortPage = (u) => { const p = String(u).replace(/^https?:\\/\\/[^/]+/, ''); return p || '/'; };\nconst bar = (v, max, col = '#2563eb') => `<div style=\"background:#eef2f7;border-radius:3px;height:10px;width:100%\"><div style=\"background:${col};border-radius:3px;height:10px;width:${max > 0 ? Math.round((v / max) * 100) : 0}%\"></div></div>`;\nconst h3 = (t, note) => `<h3 style=\"margin:28px 0 4px;font-size:16px;color:#111827\">${t}</h3>` + (note ? `<p style=\"margin:0 0 8px;font-size:12px;color:#6b7280\">${note}</p>` : '');\nconst h2 = (t) => `<h2 style=\"margin:44px 0 0;font-size:19px;border-top:2px solid #e5e7eb;padding-top:14px;color:#111827\">${t}</h2>`;\n\nfunction table(title, note, rows, cols) {\n  let h = h3(title, note);\n  if (!rows || !rows.length) return h + '<p style=\"font-size:13px;color:#9ca3af;margin:4px 0\">Nothing this week.</p>';\n  const th = cols.map((c) => `<th style=\"text-align:${c.right ? 'right' : 'left'};padding:6px 8px;background:#f3f4f6;font-size:12px;color:#374151;border-bottom:1px solid #e5e7eb;${c.w ? 'width:' + c.w : ''}\">${c.h}</th>`).join('');\n  const body = rows.map((r) => '<tr style=\"page-break-inside:avoid\">' + cols.map((c) => `<td style=\"text-align:${c.right ? 'right' : 'left'};padding:6px 8px;font-size:13px;border-bottom:1px solid #f1f5f9;color:#111827;vertical-align:top\">${c.f(r)}</td>`).join('') + '</tr>').join('');\n  return h + `<table style=\"border-collapse:collapse;width:100%\"><tr>${th}</tr>${body}</table>`;\n}\n\nconst Q = (e) => esc(e.key);\nconst P = (e) => `<span title=\"${esc(e.key)}\">${esc(shortPage(e.key))}</span>`;\nconst cClicks = { h: 'Clicks', right: true, f: (e) => n0(e.c) };\nconst cImpr = { h: 'Impr.', right: true, f: (e) => n0(e.i) };\nconst cCtr = { h: 'CTR', right: true, f: (e) => ctrTxt(e.ctr) };\nconst cPos = { h: 'Pos.', right: true, f: (e) => f1(e.pos) };\nconst clicksChange = (e) => (k.lowVol ? colored(signed(e.clickDiff, 0), e.clickDiff) : colored(pctTxt(e.clickPct), e.clickDiff));\nconst imprChange = (cur, prev) => (prev > 0 ? colored(pctTxt(((cur - prev) / prev) * 100), cur - prev) : (cur > 0 ? colored('new', 1) : '\u2013'));\n\n// ---------- Header + takeaways + KPIs ----------\nconst card = (label, value, delta, d) => `<td style=\"padding:12px;border:1px solid #e5e7eb;border-radius:6px;text-align:center;width:25%\"><div style=\"font-size:11px;color:#6b7280;text-transform:uppercase\">${label}</div><div style=\"font-size:22px;font-weight:700;color:#111827\">${value}</div><div style=\"font-size:12px\">${colored(delta, d)}</div></td>`;\nconst clicksDelta = k.lowVol ? signed(k.clicks.cur - k.clicks.prev, 0) + ' vs last wk' : pctTxt(k.clicks.pct, 'n/a');\nconst kpiRow = '<table style=\"width:100%;border-collapse:separate;border-spacing:8px\"><tr>' +\n  card('Clicks', n0(k.clicks.cur), clicksDelta, k.clicks.cur - k.clicks.prev) +\n  card('Impressions', n0(k.impressions.cur), pctTxt(k.impressions.pct, 'n/a'), k.impressions.pct) +\n  card('CTR', ctrTxt(k.ctr.cur), signed(k.ctr.diff, 2) + ' pp', k.ctr.diff) +\n  card('Avg position', f1(k.position.cur), signed(k.position.delta) + ' pos', k.position.delta) +\n  '</tr></table>';\n\nconst tkColor = { good: '#16a34a', warn: '#d97706', info: '#2563eb' };\nconst takeaways = `<div style=\"background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:6px 0 4px\"><div style=\"font-size:14px;font-weight:700;margin-bottom:6px\">Key takeaways</div>` +\n  (a.takeaways.length ? a.takeaways.map((t) => `<div style=\"border-left:4px solid ${tkColor[t.type] || '#6b7280'};padding:3px 10px;margin:6px 0;font-size:13px;line-height:1.45\">${esc(t.text)}</div>`).join('') : '<div style=\"font-size:13px;color:#6b7280\">Not enough data this week.</div>') +\n  '</div>';\n\nlet html = `<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:760px;margin:0 auto;color:#111827\">\n<h2 style=\"margin:0\">Weekly SEO Performance Report</h2>\n<p style=\"margin:4px 0 12px;font-size:13px;color:#6b7280\">${esc(cfg.siteUrl)} &middot; ${cfg.curStart} to ${cfg.curEnd} vs ${cfg.prevStart} to ${cfg.prevEnd}</p>\n${kpiRow}${takeaways}`;\n\n// ---------- Where the traffic comes from ----------\nhtml += h2('Who finds you, and for what');\nconst b = a.brandSplit;\nconst bsRows = [\n  { ...b.brand, label: 'Brand queries', note: 'People who already know you' },\n  { ...b.nonBrand, label: 'Non-brand queries', note: 'New audience: this is real SEO growth' },\n  { label: 'Anonymized (hidden by GSC)', c: b.hidden.c, i: b.hidden.i, pc: b.hidden.pc, pi: b.hidden.pi, note: 'Rare queries Google does not list' }\n];\nhtml += table('Brand vs non-brand', 'Brand terms are set in Config. Non-brand clicks are the number to grow.', bsRows, [\n  { h: 'Segment', f: (r) => `<b>${r.label}</b><div style=\"font-size:11px;color:#6b7280\">${r.note}</div>` },\n  { h: 'Clicks', right: true, f: (r) => `${n0(r.c)} <span style=\"color:#9ca3af\">(prev ${n0(r.pc)})</span>` },\n  { h: 'Impr.', right: true, f: (r) => `${n0(r.i)} <span style=\"color:#9ca3af\">(prev ${n0(r.pi)})</span>` },\n  { h: 'Impr. change', right: true, f: (r) => imprChange(r.i, r.pi) }\n]);\n\nconst maxIntent = Math.max(1, ...a.intent.map((x) => x.i));\nhtml += table('Search intent (funnel stage)', 'Rule-based keyword matching (editable in Config). Commercial queries are the ones closest to leads.', a.intent, [\n  { h: 'Intent', f: (r) => `<b>${esc(r.name)}</b>${r.examples.length ? `<div style=\"font-size:11px;color:#6b7280\">e.g. ${r.examples.map(esc).join(', ')}</div>` : ''}` },\n  { h: 'Queries', right: true, f: (r) => n0(r.n) },\n  { h: 'Impr.', right: true, f: (r) => n0(r.i) },\n  { h: 'Share', right: true, f: (r) => share(r.i, a.visibleImpr) },\n  { h: '', w: '22%', f: (r) => bar(r.i, maxIntent, '#7c3aed') },\n  { h: 'Clicks', right: true, f: (r) => n0(r.c) }\n]);\n\nif (a.countries.length) {\n  html += table('Top countries', a.targetShare !== null ? `Target-market share of impressions: ${Math.round(a.targetShare * 100)}%` : 'Set targetCountries in Config to track your target-market share.', a.countries, [\n    { h: 'Country', f: (r) => esc(r.name) },\n    { h: 'Impr.', right: true, f: (r) => n0(r.i) },\n    { h: 'Share', right: true, f: (r) => Math.round(r.share * 100) + '%' },\n    { h: 'Clicks', right: true, f: (r) => n0(r.c) },\n    { h: 'Pos.', right: true, f: (r) => f1(r.pos) }\n  ]);\n}\n\nhtml += table('Content sections', 'Pages grouped by URL path. Shows which content type earns search visibility.', a.contentSections, [\n  { h: 'Section', f: (r) => `<b>${esc(r.name)}</b>` },\n  { h: 'Pages', right: true, f: (r) => n0(r.pages) },\n  { h: 'Impr.', right: true, f: (r) => n0(r.i) },\n  { h: 'Clicks', right: true, f: (r) => n0(r.c) },\n  { h: 'CTR', right: true, f: (r) => ctrTxt(r.ctr) },\n  { h: 'Pos.', right: true, f: (r) => f1(r.pos) },\n  { h: 'Impr. change', right: true, f: (r) => imprChange(r.i, r.pi) }\n]);\n\nhtml += table('Topic clusters (non-brand)', 'Queries grouped by their strongest shared keyword (or your own topics in Config). Shows where you have topical visibility.', a.topics, [\n  { h: 'Topic', f: (r) => `<b>${esc(r.name)}</b>${r.top.length ? `<div style=\"font-size:11px;color:#6b7280\">${r.top.map(esc).join(', ')}</div>` : ''}` },\n  { h: 'Queries', right: true, f: (r) => n0(r.n) },\n  { h: 'Impr.', right: true, f: (r) => n0(r.i) },\n  { h: 'Clicks', right: true, f: (r) => n0(r.c) },\n  { h: 'Avg pos.', right: true, f: (r) => f1(r.pos) },\n  { h: 'Impr. change', right: true, f: (r) => imprChange(r.i, r.pi) }\n]);\n\n// ---------- Visibility ----------\nhtml += h2('Visibility and movement');\nconst maxB = Math.max(1, ...a.buckets.map((x) => Math.max(x.i, x.pi)));\nhtml += table('Visibility mix by position', 'Impressions of visible queries per position bucket. Explains average-position changes: more deep-ranking queries pull the average down even if nothing dropped.', a.buckets, [\n  { h: 'Position', f: (r) => `<b>${r.name}</b>` },\n  { h: 'This week', w: '26%', f: (r) => bar(r.i, maxB, '#2563eb') },\n  { h: 'Impr.', right: true, f: (r) => n0(r.i) },\n  { h: 'Last week', w: '26%', f: (r) => bar(r.pi, maxB, '#94a3b8') },\n  { h: 'Impr.', right: true, f: (r) => n0(r.pi) },\n  { h: 'Queries', right: true, f: (r) => `${r.n} <span style=\"color:#9ca3af\">(prev ${r.pn})</span>` }\n]);\n\nconst cq = a.counts.queries, cp = a.counts.pages;\nconst mvMax = Math.max(1, cq.IMPROVED, cq.STABLE, cq.DECLINED, cq.NEW, cq.LOST, cp.IMPROVED, cp.STABLE, cp.DECLINED, cp.NEW, cp.LOST);\nconst mvRows = [['&#9650; Improved', 'IMPROVED', '#16a34a'], ['&#9654; Stable', 'STABLE', '#94a3b8'], ['&#9660; Declined', 'DECLINED', '#dc2626'], ['&#9733; New', 'NEW', '#2563eb'], ['&#10005; Lost', 'LOST', '#6b7280']];\nhtml += h3('Ranking movement', `Improved/declined = average position moved by at least ${cfg.rankingChangeThreshold} positions, items with ${cfg.minImpressions}+ impressions in both weeks. Movement is ignored when both weeks are deeper than position ${cfg.positionNoiseMax}.`);\nhtml += '<table style=\"border-collapse:collapse;width:100%\"><tr><th style=\"text-align:left;padding:5px 8px;background:#f3f4f6;font-size:12px\"></th><th style=\"text-align:right;padding:5px 8px;background:#f3f4f6;font-size:12px\">Pages</th><th style=\"width:24%;background:#f3f4f6\"></th><th style=\"text-align:right;padding:5px 8px;background:#f3f4f6;font-size:12px\">Queries</th><th style=\"width:24%;background:#f3f4f6\"></th></tr>' +\n  mvRows.map(([lbl, key, col]) => `<tr style=\"page-break-inside:avoid\"><td style=\"padding:5px 8px;font-size:13px\">${lbl}</td><td style=\"padding:5px 8px;text-align:right;font-size:13px;font-weight:600\">${cp[key]}</td><td style=\"padding:5px 8px\">${bar(cp[key], mvMax, col)}</td><td style=\"padding:5px 8px;text-align:right;font-size:13px;font-weight:600\">${cq[key]}</td><td style=\"padding:5px 8px\">${bar(cq[key], mvMax, col)}</td></tr>`).join('') + '</table>';\n\n// ---------- Opportunities ----------\nhtml += h2('Opportunities and fixes');\nhtml += table('Striking distance: best ranking upside', `Non-brand queries at positions ${cfg.rankingOpportunityMin}-${cfg.rankingOpportunityMax}. \"Est. extra clicks\" = impressions x (benchmark CTR at position ${cfg.targetPosition} minus at current position). It uses a generic CTR curve, so treat it as a rough guide.`, a.striking.rows, [\n  { h: 'Query', f: Q },\n  { h: 'Pos.', right: true, f: (e) => f1(e.pos) },\n  { h: 'Impr.', right: true, f: (e) => n0(e.i) },\n  { h: 'Clicks', right: true, f: (e) => n0(e.c) },\n  { h: 'Ranking page', f: (e) => (e.page ? `<span style=\"font-size:12px\">${esc(e.page)}</span>` : '\u2013') },\n  { h: 'Est. extra clicks/wk', right: true, f: (e) => colored('+' + e.up.toFixed(1), 1) }\n]);\nhtml += table('CTR below benchmark', `Queries in the top ${cfg.ctrMaxPosition} getting less than half the clicks a typical result at that position gets (only where the benchmark predicts ${cfg.ctrMinExpectedClicks}+ clicks). Check title, meta description, and whether the page matches the intent.`, a.sections.ctrBelowExpected, [\n  { h: 'Query', f: Q },\n  { h: 'Pos.', right: true, f: (e) => f1(e.pos) },\n  { h: 'Impr.', right: true, f: (e) => n0(e.i) },\n  { h: 'Clicks', right: true, f: (e) => n0(e.c) },\n  { h: 'Expected', right: true, f: (e) => e.exp.toFixed(1) },\n  { h: 'Page', f: (e) => (e.page ? `<span style=\"font-size:12px\">${esc(e.page)}</span>` : '\u2013') }\n]);\nhtml += table('Possible cannibalization', 'Queries where 2+ of your pages get impressions. Consider consolidating or differentiating the pages.', a.cannibal, [\n  { h: 'Query', f: Q },\n  { h: 'Impr.', right: true, f: (e) => n0(e.total) },\n  { h: 'Pages (position)', f: (e) => e.pages.map((p) => `<div style=\"font-size:12px\">${esc(p.path)} <span style=\"color:#6b7280\">pos ${f1(p.pos)}, ${n0(p.i)} impr.</span></div>`).join('') }\n]);\n\n// ---------- Movers ----------\nhtml += h2('Movers');\nconst moveCols = [{ h: 'Query', f: Q }, { h: 'Prev pos.', right: true, f: (e) => f1(e.ppos) }, cPos, { h: 'Change', right: true, f: (e) => colored(signed(e.posDelta), e.posDelta) }, cImpr, cClicks];\nhtml += table('Biggest ranking improvements (queries)', '', a.sections.improved, moveCols);\nhtml += table('Biggest ranking drops (queries)', '', a.sections.declined, moveCols);\nhtml += table('New queries', 'No impressions last week, visible this week.', a.sections.newQueries, [{ h: 'Query', f: Q }, cImpr, cClicks, cPos]);\nhtml += table('Lost queries', 'Had impressions last week, none this week.', a.sections.lostQueries, [{ h: 'Query', f: Q }, { h: 'Prev impr.', right: true, f: (e) => n0(e.pi) }, { h: 'Prev clicks', right: true, f: (e) => n0(e.pc) }, { h: 'Prev pos.', right: true, f: (e) => f1(e.ppos) }]);\n\n// ---------- Pages ----------\nhtml += h2('Pages');\nhtml += table('New pages with clicks', 'Zero clicks last week, clicks this week.', a.sections.pagesNewWithClicks, [{ h: 'Page', f: P }, cClicks, cImpr, cCtr, cPos]);\nconst pgMove = [{ h: 'Page', f: P }, { h: 'Prev pos.', right: true, f: (e) => f1(e.ppos) }, cPos, { h: 'Change', right: true, f: (e) => colored(signed(e.posDelta), e.posDelta) }, cClicks];\nhtml += table('Pages gaining ranking', '', a.sections.pagesImproved, pgMove);\nhtml += table('Pages losing ranking', '', a.sections.pagesDeclined, pgMove);\nhtml += table('Pages gaining most clicks', '', a.sections.pagesGainingClicks, [{ h: 'Page', f: P }, { h: 'Prev clicks', right: true, f: (e) => n0(e.pc) }, cClicks, { h: 'Change', right: true, f: (e) => colored(signed(e.clickDiff, 0), e.clickDiff) }, cImpr]);\nhtml += table('Pages losing most clicks', '', a.sections.pagesLosingClicks, [{ h: 'Page', f: P }, { h: 'Prev clicks', right: true, f: (e) => n0(e.pc) }, cClicks, { h: 'Change', right: true, f: (e) => colored(signed(e.clickDiff, 0), e.clickDiff) }, cImpr]);\n\n// ---------- Query lists ----------\nhtml += h2('Query reference');\nhtml += table('Top queries by clicks', '', a.sections.topClicks, [{ h: 'Query', f: Q }, cClicks, cImpr, cCtr, cPos, { h: k.lowVol ? 'Clicks change' : 'Clicks change %', right: true, f: clicksChange }]);\nhtml += table('Top queries by impressions', '', a.sections.topImpressions, [{ h: 'Query', f: Q }, cImpr, cClicks, cCtr, cPos]);\nhtml += table('Best ranking queries (position 1-3)', 'Sorted by clicks.', a.sections.topRanking, [{ h: 'Query', f: Q }, cPos, cClicks, cImpr, cCtr]);\n\n// ---------- AI recommendations (Gemini) ----------\nhtml += h2('AI recommendations');\nconst prioCol = { High: '#dc2626', Medium: '#d97706', Low: '#6b7280' };\nconst badge = (p) => `<span style=\"background:${prioCol[p] || '#6b7280'};color:#fff;font-size:11px;padding:2px 7px;border-radius:10px\">${esc(p || '')}</span>`;\nconst ul = (arr) => (arr && arr.length ? '<ul style=\"margin:4px 0 0 18px;padding:0;font-size:13px;line-height:1.5\">' + arr.map((x) => `<li>${esc(x)}</li>`).join('') + '</ul>' : '');\nconst box = (inner) => `<div style=\"border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;margin:8px 0;page-break-inside:avoid\">${inner}</div>`;\nconst sub = (t) => `<div style=\"font-size:12px;margin-top:6px;color:#374151\"><b>${t}</b></div>`;\n\nif (!a.ai || !a.ai.ok) {\n  html += `<p style=\"font-size:13px;color:#9ca3af\">AI recommendations were not available this week (${esc((a.ai && a.ai.reason) || 'not run')}).</p>`;\n} else {\n  html += `<p style=\"font-size:12px;color:#6b7280\">Written by Gemini from the data in this report. Title and meta lines are suggestions only (the live titles were not checked). Verify before applying.</p>`;\n\n  html += h3('Improve CTR / clicks');\n  html += a.ai.ctr.length ? a.ai.ctr.map((r) => box(\n    `<div><b>${esc(r.query)}</b> ${badge(r.priority)}</div>` +\n    `<div style=\"font-size:12px;color:#6b7280\">${esc(r.ref.page || '')} &middot; pos ${f1(r.ref.position)} &middot; ${n0(r.ref.impressions)} impr. &middot; ${n0(r.ref.clicks)} clicks &middot; benchmark ~${f1(r.ref.benchmarkClicks)} clicks${r.extraClicks > 0 ? ` &middot; <b style=\"color:#16a34a\">potential +${f1(r.extraClicks)}/wk</b>` : ''}</div>` +\n    `<div style=\"font-size:13px;margin-top:4px\">${esc(r.problem)}</div>` +\n    (r.title_options && r.title_options.length ? sub('Title ideas') + ul(r.title_options) : '') +\n    (r.meta_option ? sub('Meta idea') + `<div style=\"font-size:13px\">${esc(r.meta_option)}</div>` : '') +\n    (r.other_actions && r.other_actions.length ? sub('Other actions') + ul(r.other_actions) : '')\n  )).join('') : '<p style=\"font-size:13px;color:#9ca3af\">No CTR recommendations this week.</p>';\n\n  html += h3('Grow impressions on key pages', esc(a.ai.rule || ''));\n  html += a.ai.pages.length ? a.ai.pages.map((r) => box(\n    `<div><b>${esc(r.page)}</b> ${badge(r.priority)}</div>` +\n    `<div style=\"font-size:12px;color:#6b7280\">${n0(r.ref.impressions)} impr. (prev ${n0(r.ref.prevImpressions)}${r.ref.growthPct !== null ? ', ' + pctTxt(r.ref.growthPct) : ''}) &middot; pos ${f1(r.ref.position)} &middot; ${n0(r.ref.clicks)} clicks</div>` +\n    `<div style=\"font-size:13px;margin-top:4px\">${esc(r.problem)}</div>` +\n    (r.target_queries && r.target_queries.length ? `<div style=\"font-size:12px;margin-top:6px;color:#374151\"><b>Target queries:</b> ${r.target_queries.map(esc).join(', ')}</div>` : '') +\n    ul(r.actions)\n  )).join('') : '<p style=\"font-size:13px;color:#9ca3af\">No page recommendations this week.</p>';\n}\n\nhtml += `<p style=\"margin-top:32px;font-size:11px;color:#9ca3af\">Source: Google Search Console. All figures are computed with fixed rules; only the \"AI recommendations\" section is generated by Gemini. Position change = previous minus current (positive = better). Avg position is impression-weighted. GSC hides anonymized queries, so query-level sums are lower than totals. Estimates use a generic CTR benchmark.</p></div>`;\n\nconst subject = `SEO Weekly: ${n0(k.clicks.cur)} clicks (${k.lowVol ? signed(k.clicks.cur - k.clicks.prev, 0) : pctTxt(k.clicks.pct, 'n/a')}), ${n0(k.impressions.cur)} impr. | ${cfg.curStart} to ${cfg.curEnd}`;\nreturn [{ json: { subject, html } }];\n"
+      },
+      "name": "Build HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3168,
+        160
+      ],
+      "id": "05d06b0f-7602-4334-b9cd-91a41f323082"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { html, subject } = $input.first().json;\nconst fullHtml = `<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Weekly SEO Performance Report</title></head><body>${html}</body></html>`;\n// Gotenberg needs a real file named exactly index.html\nconst bin = await this.helpers.prepareBinaryData(Buffer.from(fullHtml, 'utf8'), 'index.html', 'text/html');\nreturn [{ json: { subject }, binary: { data: bin } }];\n"
+      },
+      "name": "Create index.html",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3408,
+        160
+      ],
+      "id": "7023f074-59e2-46fd-8ca5-1cebcc0f81ca"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://gotenberg:3000/forms/chromium/convert/html",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Gotenberg-Output-Filename",
+              "value": "={{ 'seo-report-' + $('Config').first().json.curEnd }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "files",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "printBackground",
+              "value": "true"
+            },
+            {
+              "name": "paperWidth",
+              "value": "8.27"
+            },
+            {
+              "name": "paperHeight",
+              "value": "11.7"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "name": "Gotenberg PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3632,
+        160
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "id": "5de082e4-fece-4550-9a6a-4c6c5acafde0"
+    },
+    {
+      "parameters": {
+        "sendTo": "your-email@example.com",
+        "subject": "={{ $('Build HTML').first().json.subject }}",
+        "message": "={{ $('Build HTML').first().json.html }}",
+        "options": {
+          "appendAttribution": false,
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "name": "Send Report (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3888,
+        160
+      ],
+      "id": "d833d283-00c0-45e6-b8a8-a05fb8c9500d",
+      "webhookId": "05242089-a263-4c05-94f9-fd0d9b467d08",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Select gmailOAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        560
+      ],
+      "id": "f050c80c-4372-4831-b210-ef0c61fc1aaf"
+    },
+    {
+      "parameters": {
+        "sendTo": "your-email@example.com",
+        "subject": "GSC weekly report FAILED",
+        "message": "=<p>Workflow: {{ $json.workflow.name }}</p><p>Failed node: {{ $json.execution.lastNodeExecuted }}</p><p>Error: {{ $json.execution.error.message }}</p><p><a href=\"{{ $json.execution.url }}\">Open execution</a></p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Failure Alert (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        48,
+        560
+      ],
+      "id": "da92b18f-a9f0-444f-983b-46057eda920a",
+      "webhookId": "a1445f03-0aa6-412c-bff7-a587782a0332",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Select gmailOAuth2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Weekly Schedule (Mon 8AM)": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Test": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Failure Alert (Gmail)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "GSC Totals Current",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Totals Current": {
+      "main": [
+        [
+          {
+            "node": "GSC Totals Previous",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Totals Previous": {
+      "main": [
+        [
+          {
+            "node": "GSC Queries Current",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Queries Current": {
+      "main": [
+        [
+          {
+            "node": "GSC Queries Previous",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Queries Previous": {
+      "main": [
+        [
+          {
+            "node": "GSC Pages Current",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Pages Current": {
+      "main": [
+        [
+          {
+            "node": "GSC Pages Previous",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Pages Previous": {
+      "main": [
+        [
+          {
+            "node": "GSC QueryPage Current",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC QueryPage Current": {
+      "main": [
+        [
+          {
+            "node": "GSC Country Current",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Country Current": {
+      "main": [
+        [
+          {
+            "node": "Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze": {
+      "main": [
+        [
+          {
+            "node": "Build AI Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build AI Payload": {
+      "main": [
+        [
+          {
+            "node": "Gemini Recommendations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Recommendations": {
+      "main": [
+        [
+          {
+            "node": "Parse AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI": {
+      "main": [
+        [
+          {
+            "node": "Build HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build HTML": {
+      "main": [
+        [
+          {
+            "node": "Create index.html",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create index.html": {
+      "main": [
+        [
+          {
+            "node": "Gotenberg PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gotenberg PDF": {
+      "main": [
+        [
+          {
+            "node": "Send Report (Gmail)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "86ef359c-39be-4f3b-9723-86df3aa33fff",
+  "meta": {
+    "instanceId": "fcf7f432b0b30bffad85c831498a2af6aa6e964a59f37d6f93395de9f63a1b57"
+  },
+  "nodeGroups": [],
+  "id": "Sak9VspF4NtYsv0S",
+  "tags": []
+}

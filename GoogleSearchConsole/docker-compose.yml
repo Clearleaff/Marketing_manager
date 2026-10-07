@@ -1,0 +1,73 @@
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: gsc_n8n
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      # ── Core Settings ───────────────────────────────────────
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+
+      # ── Encryption key (REQUIRED – keep secret & persistent) ─
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in .env}
+
+      # ── Timezone ───────────────────────────────────────────
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Asia/Kolkata}
+      - TZ=${GENERIC_TIMEZONE:-Asia/Kolkata}
+
+      # ── Execution Data Retention ───────────────────────────
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+
+      # ── Optional API Keys ──────────────────────────────────
+      - N8N_GEMINI_API_KEY=${N8N_GEMINI_API_KEY:-}
+
+    volumes:
+      # Persistent named volume for n8n database, workflows, and credentials
+      - gsc_n8n_data:/home/node/.n8n
+
+    depends_on:
+      gotenberg:
+        condition: service_healthy
+
+    networks:
+      - gsc-network
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: gsc_gotenberg
+    restart: unless-stopped
+    ports:
+      - "${GOTENBERG_PORT:-3000}:3000"
+    volumes:
+      # Persistent named volume for temporary PDF generation assets & rendering cache
+      - gsc_gotenberg_data:/tmp
+    networks:
+      - gsc-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  gsc_n8n_data:
+    driver: local
+  gsc_gotenberg_data:
+    driver: local
+
+networks:
+  gsc-network:
+    driver: bridge
