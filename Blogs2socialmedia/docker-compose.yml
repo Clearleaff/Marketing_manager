@@ -34,7 +34,7 @@ services:
       - n8n_data:/home/node/.n8n
 
       # Mount the workflow JSON so you can import it on first run
-      - ./Social Media Chat Agent (fixed) (4).json:/home/node/workflow.json:ro
+      - ./Social Media Chat Agent.json:/home/node/workflow.json:ro
 
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
